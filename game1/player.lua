@@ -5,11 +5,12 @@ local Player = {}
 
 function Player:new()
     local p = {}
+
     p.x = 100
     p.y = 100
     p.width = 150
     p.height = 150
-    p.speed = 200
+    p.speed = 180
 
     p.health = 100
     p.maxHealth = 100
@@ -20,7 +21,7 @@ function Player:new()
     p.invulnerable = false
     p.invulnerableTimer = 0
 
-    p.dashSpeed = 400
+    p.dashSpeed = 350
     p.dashDuration = 0.2
     p.dashCooldown = 1.0
     p.dashTimer = 0
@@ -54,6 +55,7 @@ function Player:new()
 end
 
 function Player:update(dt)
+    local worldMap = _G.worldMap
     local walls = _G.walls or {}
 
     local directionX = 0
@@ -113,6 +115,10 @@ function Player:update(dt)
             self.isDashing = true
             self.dashTimer = self.dashDuration
             self.dashCooldownTimer = self.dashCooldown
+            if _G.main and _G.main.sounds and _G.main.sounds.dash then
+                _G.main.sounds.dash:stop()
+                _G.main.sounds.dash:play()
+            end
         end
     end
 
@@ -122,33 +128,70 @@ function Player:update(dt)
         directionY = directionY / length
     end
 
-
-    self.energy = math.max(self.energy - dt * 5, 0)
-
+    self.energy = math.max(self.energy - dt * 2, 0)
+    
     local energyBonus = 1 + (self.energy / self.maxEnergy) * 0.5
-
+    
     local currentSpeed = self.speed * energyBonus
     if self.isDashing then
         currentSpeed = self.dashSpeed * energyBonus
     end
 
-
-    local oldX = self.x
-    self.x = self.x + directionX * currentSpeed * dt
-    for _, wall in ipairs(walls) do
-        if collision.check(self, wall) then
-            self.x = oldX
-            break
+    if worldMap and worldMap.isWalkable then
+        local nextX = self.x + directionX * currentSpeed * dt
+        local checkPoints = {
+            {x = nextX + 20, y = self.y + 20},
+            {x = nextX + self.width - 20, y = self.y + 20},
+            {x = nextX + 20, y = self.y + self.height - 20},
+            {x = nextX + self.width - 20, y = self.y + self.height - 20},
+            {x = nextX + self.width/2, y = self.y + self.height/2}
+        }
+        local canMoveX = true
+        for _, point in ipairs(checkPoints) do
+            if not worldMap:isWalkable(point.x, point.y, self.width, self.height) then
+                canMoveX = false
+                break
+            end
         end
-    end
+        if canMoveX then
+            self.x = nextX
+        end
+        
+        local nextY = self.y + directionY * currentSpeed * dt
+        local checkPointsY = {
+            {x = self.x + 20, y = nextY + 20},
+            {x = self.x + self.width - 20, y = nextY + 20},
+            {x = self.x + 20, y = nextY + self.height - 20},
+            {x = self.x + self.width - 20, y = nextY + self.height - 20},
+            {x = self.x + self.width/2, y = nextY + self.height/2}
+        }
+        local canMoveY = true
+        for _, point in ipairs(checkPointsY) do
+            if not worldMap:isWalkable(point.x, point.y, self.width, self.height) then
+                canMoveY = false
+                break
+            end
+        end
+        if canMoveY then
+            self.y = nextY
+        end
+    else
+        local oldX = self.x
+        self.x = self.x + directionX * currentSpeed * dt
+        for _, wall in ipairs(walls) do
+            if collision.check(self, wall) then
+                self.x = oldX
+                break
+            end
+        end
 
-
-    local oldY = self.y
-    self.y = self.y + directionY * currentSpeed * dt
-    for _, wall in ipairs(walls) do
-        if collision.check(self, wall) then
-            self.y = oldY
-            break
+        local oldY = self.y
+        self.y = self.y + directionY * currentSpeed * dt
+        for _, wall in ipairs(walls) do
+            if collision.check(self, wall) then
+                self.y = oldY
+                break
+            end
         end
     end
 
@@ -173,15 +216,15 @@ end
 
 function Player:draw()
     if self.isDashing then
-        love.graphics.setColor(1, 1, 0) 
+        love.graphics.setColor(1, 1, 0)
     elseif self.invulnerable then
         if math.floor(love.timer.getTime() * 10) % 2 == 0 then
-            love.graphics.setColor(1, 0.5, 0.5) 
+            love.graphics.setColor(1, 0.5, 0.5)
         else
-            love.graphics.setColor(1, 1, 1)      
+            love.graphics.setColor(1, 1, 1)
         end
     else
-        love.graphics.setColor(1, 1, 1) 
+        love.graphics.setColor(1, 1, 1)
     end
 
     self.currentAnim:draw(self.spriteSheet, self.x, self.y)
